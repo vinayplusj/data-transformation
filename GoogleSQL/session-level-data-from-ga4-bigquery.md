@@ -220,7 +220,7 @@ FROM session_agg;
 
 ---
 
-## Next Improvements would be to create a user-level rollup table
+## Next Improvements would be to create a [user-level](user-level-data-from-ga4-bigquery.md) rollup table
 
 ---
 
