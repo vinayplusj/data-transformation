@@ -1,7 +1,7 @@
 # GA4 Event- and Pageview-Level Table in BigQuery
 
 ### Overview
-GA4 raw exports are event-based, but the schema is complex and nested. After we create session and user level tables, the next task typically is to use GA4 bigquery exports is to transform **raw Google Analytics 4 BigQuery export data** into a **clean, session-level analytics table** through **GoogleSQL (in BigQuery)**.
+GA4 raw exports are event-based, but the schema is complex and nested. After we create [session](session-level-data-from-ga4-bigquery.md) and [user level](user-level-data-from-ga4-bigquery.md) tables, the next task typically is to use GA4 bigquery exports is to transform **raw Google Analytics 4 BigQuery export data** into a **clean, session-level analytics table** through **GoogleSQL (in BigQuery)**.
 
 The goal of this task is to:
 
