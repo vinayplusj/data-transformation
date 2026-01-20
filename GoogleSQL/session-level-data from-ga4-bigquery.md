@@ -1,4 +1,4 @@
-# GA4 Session-Level Analytics in BigQuery
+# GA4 Session-Level Table in BigQuery
 
 ## Overview
 One of the first necessary tasks to use GA4 bigquery exports is to transform **raw Google Analytics 4 BigQuery export data** into a **clean, session-level analytics table** through **GoogleSQL (in BigQuery)**.
