@@ -1,6 +1,8 @@
 # Flatten and Enrich Earthquake Data from USGS GeoJSON Feed
 
-**Purpose**: Data is often provided as JSON through APIs because that combination makes it easy for many different systems and tools to talk to each other in a safe and flexible way. 
+## **Purpose**: 
+
+Data is often provided as JSON through APIs because that combination makes it easy for many different systems and tools to talk to each other in a safe and flexible way. 
 JSON supports nested data. APIs keep one central source of truth and support automated data refresh.
 Connect to the public GeoJSON API from the United States Geological Survey (USGS) and transform nested earthquake data into a clean, long-format, analysis-ready table using Power Query M. 
 This code connects to the [USGS FDSN Event API](https://earthquake.usgs.gov/fdsnws/event/1/) to retrieve and flatten a full year of global earthquake data. 
