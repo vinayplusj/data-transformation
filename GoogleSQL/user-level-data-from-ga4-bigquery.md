@@ -3,7 +3,7 @@
 ## Overview
 
 GA4’s raw export in Bigquery is **event-based**, which is powerful but difficult for non-technical teams to use directly. 
-After creating session level table from GA4 biogquery tables, we usually transform **raw Google Analytics 4 BigQuery export data** into a **user-level analytics table** through GoogleSQL (in BigQuery).
+After creating [session level](session-level-data-from-ga4-bigquery.md) table from GA4 BigQuery tables, we usually transform **raw Google Analytics 4 BigQuery export data** into a **user-level analytics table** through GoogleSQL (in BigQuery).
 Most business questions are **user-centric**, not event-centric.
 
 Executives, especially marketing leaders, and product owners rarely ask “How many logins/ form starts did we have?”
@@ -241,7 +241,7 @@ A user-level table enables:
 ## Next Improvements would be
 
 * Conversion summaries per user
-* Filter out based on consent and privacy choices and policies
+* Filter out data based on consent and privacy choices and policies
 * Create cohort-ready snapshots
 
 ---
