@@ -1,138 +1,191 @@
-# Session-Level Data from GA4 Using Impala SQL
+# GA4 Session-Level Table Using Impala SQL
 
-## What this page shows
+## Overview
 
-This page shows how to create a **session-level table** from GA4-style raw event data using **Impala SQL**.
+One of the first necessary tasks when using GA4 raw export data outside BigQuery is to transform **raw Google Analytics 4 BigQuery export data** into a **clean, session-level analytics table**.
 
-The assumption is that GA4 raw export data has already been moved out of BigQuery and into a data lake or warehouse layer that can be queried with Impala.
+In this version, the assumption is that GA4 BigQuery export data has been copied to another data lake, such as **Azure Data Lake Storage**, and is queried using **Impala SQL**.
 
-The output table has **one row per session**, using:
+The goal of this task is to:
 
-```text
-user_pseudo_id + ga_session_id
-```
+- Work with nested and repeated GA4 event data after it has been moved out of BigQuery
+- Define sessions correctly using GA4 logic
+- Create analysis-ready tables for reports and dashboards
+- Make GA4 data easier to use in an enterprise data lake environment
 
-as the session key.
+This type of session table is commonly used directly for:
 
----
-
-## Why this matters to business stakeholders
-
-Most business teams do not want to work directly with raw GA4 events. They usually want to understand visits, engagement, traffic quality, and landing page performance.
-
-A session-level table helps answer questions such as:
-
-* How many visits did the site or app receive?
-* Which campaigns or channels drove better-quality visits?
-* Which landing pages started the most sessions?
-* How long did users stay?
-* Which sessions were engaged?
-
-This table turns detailed event data into a format that is easier to use in dashboards, scorecards, and regular business reviews.
+- Marketing performance analysis
+- Funnel and journey analysis
+- Attribution modelling
+- Landing page analysis
+- Executive dashboards in Tableau, Power BI, or Looker
 
 ---
 
-## Source data assumption
+## Data Source
 
-Impala SQL does not handle GA4 BigQuery nested data in the same way as GoogleSQL.
+**Original source:** Google Analytics 4 BigQuery Export  
+**Storage location:** Azure Data Lake or another data lake  
+**Query engine:** Impala SQL  
+**Example external table:** `analytics.ga4_events_nested`  
+**Grain:** Event-level raw data  
 
-For this example, the GA4 data is assumed to have already been prepared into a flatter event table with one row per event.
+Each row in the source table represents a single GA4 event with nested fields.
 
-Example source table:
+The source is assumed to retain the GA4 export structure, including:
 
-```text
-analytics.ga4_events_flat
-```
-
-Expected fields:
-
-| Field                  | Description                     |
-| ---------------------- | ------------------------------- |
-| `event_date`           | Event date in `yyyyMMdd` format |
-| `event_timestamp`      | Event timestamp in microseconds |
-| `user_pseudo_id`       | GA4 anonymous user identifier   |
-| `ga_session_id`        | GA4 session identifier          |
-| `event_name`           | GA4 event name                  |
-| `page_location`        | Page URL                        |
-| `engagement_time_msec` | Engagement time in milliseconds |
-| `session_engaged`      | GA4 engaged session flag        |
-| `source`               | Traffic source                  |
-| `medium`               | Traffic medium                  |
-| `campaign`             | Campaign name                   |
-| `device_category`      | Device category                 |
-| `operating_system`     | Operating system                |
-| `browser`              | Browser                         |
-| `country`              | Country                         |
-| `region`               | Region                          |
-| `city`                 | City                            |
+- `event_params` as an array of key-value structs
+- `device` as a struct
+- `geo` as a struct
+- `traffic_source` as a struct
 
 ---
 
-## Output table
+## Session Definition
 
-Each row represents **one session**.
+A session is defined from GA4 best practices:
 
-Output fields:
+- **Session key:** `user_pseudo_id + ga_session_id`
+- **Session start:** Earliest event timestamp in the session
+- **Session end:** Latest event timestamp in the session
+- **Session duration:** Difference between end and start timestamps
+- **Landing page:** First non-null `page_location` in the session
+- **Engaged session:** Based on the `session_engaged` parameter
 
-* `session_date`
-* `user_pseudo_id`
-* `ga_session_id`
-* `session_start_time`
-* `session_end_time`
-* `session_duration_seconds`
-* `landing_page`
-* `event_count`
-* `pageviews`
-* `total_engagement_time_msec`
-* `engaged_session`
-* `source`
-* `medium`
-* `campaign`
-* `device_category`
-* `operating_system`
-* `browser`
-* `country`
-* `region`
-* `city`
+The `ga_session_id` value is extracted from `event_params`.
 
 ---
 
-## Impala SQL query
+## Final Session-Level Table
+
+Each row in the output table represents **one session**.
+
+### Output fields
+
+- `user_pseudo_id`
+- `ga_session_id`
+- `session_start_time`
+- `session_end_time`
+- `session_duration_seconds`
+- `landing_page`
+- `event_count`
+- `pageviews`
+- `total_engagement_time_msec`
+- `engaged_session`
+- `source`
+- `medium`
+- `campaign`
+- `device_category`
+- `operating_system`
+- `browser`
+- `country`
+- `region`
+- `city`
+
+This table can be linked to BI tools or joined to cost, campaign, CRM, or conversion tables in a warehouse or lakehouse environment.
+
+---
+
+## SQL Query (Impala SQL)
 
 ```sql
 -- GA4 Session-Level Table using Impala SQL
+-- Source: nested GA4 BigQuery export copied to Azure Data Lake
 -- Grain: one row per session
 -- Session key: user_pseudo_id + ga_session_id
 
-WITH base_events AS (
+WITH exploded_params AS (
 
+  -- Expand event_params so selected GA4 parameters can be extracted
+  SELECT
+    e.event_date,
+    e.user_pseudo_id,
+    e.event_timestamp,
+    e.event_name,
+
+    -- Struct fields from the GA4 export
+    e.device.category AS device_category,
+    e.device.operating_system AS operating_system,
+    e.device.web_info.browser AS browser,
+
+    e.geo.country AS country,
+    e.geo.region AS region,
+    e.geo.city AS city,
+
+    e.traffic_source.source AS source,
+    e.traffic_source.medium AS medium,
+    e.traffic_source.name AS campaign,
+
+    -- event_params is an array of structs.
+    -- In Impala, array elements are commonly accessed through the item field.
+    ep.item.key AS param_key,
+
+    COALESCE(
+      ep.item.value.string_value,
+      CAST(ep.item.value.int_value AS STRING),
+      CAST(ep.item.value.double_value AS STRING),
+      CAST(ep.item.value.float_value AS STRING)
+    ) AS param_value
+
+  FROM analytics.ga4_events_nested e,
+       e.event_params ep
+
+  WHERE e.event_date BETWEEN '20240101' AND '20241231'
+    AND ep.item.key IN (
+      'ga_session_id',
+      'page_location',
+      'engagement_time_msec',
+      'session_engaged'
+    )
+),
+
+pivoted_events AS (
+
+  -- Convert selected GA4 parameters into event-level columns
   SELECT
     event_date,
     user_pseudo_id,
-    ga_session_id,
     event_timestamp,
     event_name,
-    page_location,
-    engagement_time_msec,
-    session_engaged,
+
+    device_category,
+    operating_system,
+    browser,
+
+    country,
+    region,
+    city,
+
     source,
     medium,
     campaign,
+
+    CAST(MAX(CASE WHEN param_key = 'ga_session_id' THEN param_value END) AS BIGINT) AS ga_session_id,
+    MAX(CASE WHEN param_key = 'page_location' THEN param_value END) AS page_location,
+    CAST(MAX(CASE WHEN param_key = 'engagement_time_msec' THEN param_value END) AS BIGINT) AS engagement_time_msec,
+    MAX(CASE WHEN param_key = 'session_engaged' THEN param_value END) AS session_engaged
+
+  FROM exploded_params
+  GROUP BY
+    event_date,
+    user_pseudo_id,
+    event_timestamp,
+    event_name,
     device_category,
     operating_system,
     browser,
     country,
     region,
-    city
-
-  FROM analytics.ga4_events_flat
-  WHERE event_date BETWEEN '20240101' AND '20241231'
-    AND ga_session_id IS NOT NULL
+    city,
+    source,
+    medium,
+    campaign
 ),
 
 landing_pages AS (
 
-  -- Identify the first page URL in each session
+  -- Identify the first non-null page URL in each session
   SELECT
     user_pseudo_id,
     ga_session_id,
@@ -146,19 +199,20 @@ landing_pages AS (
         PARTITION BY user_pseudo_id, ga_session_id
         ORDER BY event_timestamp
       ) AS page_rank
-    FROM base_events
-    WHERE page_location IS NOT NULL
+    FROM pivoted_events
+    WHERE ga_session_id IS NOT NULL
+      AND page_location IS NOT NULL
   ) ranked_pages
   WHERE page_rank = 1
 ),
 
 session_agg AS (
 
+  -- Aggregate event rows to session level
   SELECT
     user_pseudo_id,
     ga_session_id,
 
-    MIN(event_date) AS session_date,
     MIN(event_timestamp) AS session_start_ts,
     MAX(event_timestamp) AS session_end_ts,
 
@@ -180,25 +234,28 @@ session_agg AS (
       END
     ) AS engaged_session,
 
-    -- Dimensions assumed to be stable enough at session grain
+    -- Dimensions assumed stable enough at session grain
     MAX(source) AS source,
     MAX(medium) AS medium,
     MAX(campaign) AS campaign,
+
     MAX(device_category) AS device_category,
     MAX(operating_system) AS operating_system,
     MAX(browser) AS browser,
+
     MAX(country) AS country,
     MAX(region) AS region,
     MAX(city) AS city
 
-  FROM base_events
+  FROM pivoted_events
+  WHERE ga_session_id IS NOT NULL
   GROUP BY
     user_pseudo_id,
     ga_session_id
 )
 
+-- Final session-level output
 SELECT
-  s.session_date,
   s.user_pseudo_id,
   s.ga_session_id,
 
@@ -231,127 +288,3 @@ LEFT JOIN landing_pages lp
   ON s.user_pseudo_id = lp.user_pseudo_id
  AND s.ga_session_id = lp.ga_session_id
 ;
-```
-
----
-
-## Notes on the SQL logic
-
-### Session key
-
-The session key is:
-
-```text
-user_pseudo_id + ga_session_id
-```
-
-This is important because `ga_session_id` alone is not globally unique.
-
-### Landing page
-
-The landing page is selected as the first non-null `page_location` within the session, ordered by `event_timestamp`.
-
-This is done with `ROW_NUMBER()` because Impala SQL does not use BigQuery’s `ARRAY_AGG(... ORDER BY ...)[SAFE_OFFSET(0)]` pattern.
-
-### Session duration
-
-GA4 event timestamps are usually stored in microseconds.
-
-The query calculates duration as:
-
-```text
-(session_end_ts - session_start_ts) / 1,000,000
-```
-
-### Session dimensions
-
-Fields such as source, medium, campaign, device, and geography are rolled up using `MAX()`.
-
-In a production model, you may choose a more precise rule, such as:
-
-* first value in the session
-* last value in the session
-* most frequent value in the session
-
-The right choice depends on how the business defines attribution and reporting.
-
----
-
-## What changes from GoogleSQL to Impala SQL
-
-### 1. No wildcard tables
-
-BigQuery often uses:
-
-```sql
-FROM `project.dataset.events_*`
-WHERE _TABLE_SUFFIX BETWEEN '20240101' AND '20241231'
-```
-
-Impala usually queries a table directly:
-
-```sql
-FROM analytics.ga4_events_flat
-WHERE event_date BETWEEN '20240101' AND '20241231'
-```
-
-### 2. Nested GA4 parameters usually need preparation
-
-GoogleSQL can directly query nested GA4 fields with `UNNEST(event_params)`.
-
-In Impala, the cleanest pattern is often to prepare a flatter event table first, then build analytics models on top of it.
-
-### 3. First-value logic uses window functions
-
-GoogleSQL often uses ordered arrays.
-
-Impala can use:
-
-```sql
-ROW_NUMBER() OVER (
-  PARTITION BY user_pseudo_id, ga_session_id
-  ORDER BY event_timestamp
-)
-```
-
-This works well for landing page extraction and event sequencing.
-
-### 4. Timestamp conversion is different
-
-GoogleSQL uses `TIMESTAMP_MICROS()`.
-
-Impala commonly uses:
-
-```sql
-FROM_UNIXTIME(CAST(event_timestamp / 1000000 AS BIGINT))
-```
-
----
-
-## Business use cases
-
-This session-level table can support:
-
-* Marketing performance dashboards
-* Landing page analysis
-* Channel quality reporting
-* Funnel and journey diagnostics
-* Executive traffic summaries
-
----
-
-## Production considerations
-
-For production use:
-
-* Partition the output table by `session_date`
-* Validate session counts against GA4 or downstream benchmarks
-* Store this as a managed table or scheduled transformation
-* Centralize the flattened GA4 event preparation step
-* Document attribution assumptions clearly
-
----
-
-## Author
-
-**Vinay Jagannath**
