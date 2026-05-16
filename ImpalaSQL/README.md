@@ -2,7 +2,7 @@
 
 GA4 raw export data is often used outside the GA4 interface so teams can create more flexible and reliable reporting tables.
 
-In this folder, the assumption is that GA4 raw data has already been copied from BigQuery into a data lake or warehouse layer where it can be queried with Impala SQL.
+For this folder, the assumption is that GA4 raw data has already been copied from BigQuery into a data lake or warehouse layer where it can be queried with Impala SQL.
 
 The goal is to transform raw GA4-style event data into flatter tables that are easier to use for dashboards, analysis, and business decision-making.
 
@@ -107,7 +107,17 @@ Common changes include:
 
 In practice, the best Impala SQL pattern depends on how GA4 raw data was flattened before being made available to Impala.
 
-This folder assumes that GA4 parameters have either been flattened into columns or stored in a table that can be joined by `event_id`, `event_name`, `user_pseudo_id`, and `ga_session_id`.
+In this folder, the assumption is that GA4 BigQuery export data has been copied to Azure Data Lake or another data lake while retaining its nested export structure.
+
+The examples assume the data is exposed to Impala through external tables, with nested fields such as:
+
+- `event_params`
+- `items`
+- `device`
+- `geo`
+- `traffic_source`
+
+The SQL examples show how to extract selected nested parameters and reshape them into business-ready tables.
 
 ---
 
